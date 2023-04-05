@@ -1,14 +1,16 @@
-import sys
+import dataclasses
 import enum
+import sys
+from typing import List
 
 import numpy as np
 from skimage import io
 from matplotlib import pyplot as plt
 
 
-min_difference = 10
-lower_factor = 1/2
-upper_factor = 1/2
+min_difference = 50
+lower_factor = 1/3
+upper_factor = 1/3
 min_duration = 2
 
 
@@ -18,7 +20,14 @@ class State(enum.Enum):
     entered_higher = 3
 
 
-def find_pulses(image_stack, row, column):
+@dataclasses.dataclass
+class PulseInfo:
+    start: int
+    duration: int = 0
+    value: int = 0
+
+
+def find_pulses(image_stack, row, column) -> List[PulseInfo]:
     pixel_values = [
         image[row][column]
         for image in image_stack
@@ -38,14 +47,16 @@ def find_pulses(image_stack, row, column):
             elif state == State.entered_lower:
                 if value >= upper_threshold:
                     state = State.entered_higher
-                    enter_index = index
+                    pulse_info = PulseInfo(start=index)
                     duration = 1
                     max_value = value
             elif state == State.entered_higher:
                 if value < upper_threshold:
                     state = State.wait_for_lower
                     if duration >= min_duration:
-                        pulses.append((enter_index, duration, max_value))
+                        pulse_info.duration = duration
+                        pulse_info.value = max_value
+                        pulses.append(pulse_info)
                 else:
                     duration += 1
                     max_value = max(value, max_value)
@@ -58,7 +69,7 @@ def find_pulses(image_stack, row, column):
     return pulses
 
 
-def find_all_pulses(image_stack):
+def find_all_pulses_image(image_stack):
     rows, columns = image_stack[0].shape
     result_image = np.zeros([rows, columns], dtype=np.uint8)
     max_pulses = None
@@ -76,10 +87,34 @@ def find_all_pulses(image_stack):
     return result_image, max_pulses
 
 
+def plot_pulses(image_stack):
+    rows, columns = image_stack[0].shape
+    result = [0] * image_stack.shape[0]
+    for r in range(rows):
+        for c in range(columns):
+            pulse_infos = find_pulses(image_stack, r, c)
+            for pulse_info in pulse_infos:
+                index = pulse_info.start + int(pulse_info.duration / 2)
+                if index >= len(result):
+                    index = len(result) - 1
+                result[index] += 1
+    max_value = max(result)
+    return [v * (100.0 / max_value) for v in result]
+
+
 def cli():
-    image_stack = io.imread(sys.argv[1])
-    result_image, max_pulses = find_all_pulses(image_stack)
-    plt.imshow(result_image, cmap='gray', vmin=0, vmax=10, interpolation=None)
+    file_name = sys.argv[1]
+    image_stack = io.imread(file_name)
+
+    #result_image, max_pulses = find_all_pulses_image(image_stack)
+    #plt.title(file_name)
+    #plt.imshow(result_image, vmin=0, vmax=255, cmap='plasma', interpolation=None)
+    #plt.show()
+    #return
+
+    data = plot_pulses(image_stack)
+    plt.title(file_name)
+    plt.plot(range(image_stack.shape[0]), data)
     plt.show()
 
 
