@@ -1,11 +1,13 @@
 import dataclasses
 import enum
 import sys
+from collections import defaultdict
 from typing import List
 
 import numpy as np
-from skimage import io
 from matplotlib import pyplot as plt
+from skimage import io
+from skimage.restoration import denoise_tv_chambolle
 
 
 min_difference = 50
@@ -102,6 +104,39 @@ def plot_pulses(image_stack):
     return [v * (100.0 / max_value) for v in result]
 
 
+def plot_pulses_percent(image_stack):
+    rows, columns = image_stack[0].shape
+    result = [0] * image_stack.shape[0]
+
+    # Collect all bursting pixels
+    bursting_pixels = dict()
+    for r in range(rows):
+        for c in range(columns):
+            pulse_infos = find_pulses(image_stack, r, c)
+            if pulse_infos:
+                bursting_pixels[(r, c)] = pulse_infos
+    total_pixel_number = len(bursting_pixels)
+    print(total_pixel_number)
+
+    # Find bursts
+    burst_per_frame = defaultdict(list)
+    for r in range(rows):
+        for c in range(columns):
+            pulse_infos = bursting_pixels.get((r, c), [])
+            for pulse_info in pulse_infos:
+                index = pulse_info.start + int(pulse_info.duration / 2)
+                if index >= len(result):
+                    index = len(result) - 1
+                burst_per_frame[index].append(pulse_info)
+            if pulse_infos:
+                print(r, c, pulse_infos)
+
+    result = [0] * image_stack.shape[0]
+    for index, bursts in burst_per_frame.items():
+        result[index] = len(bursts) * 100 / total_pixel_number
+    return result
+
+
 def cli():
     file_name = sys.argv[1]
     image_stack = io.imread(file_name)
@@ -112,7 +147,8 @@ def cli():
     #plt.show()
     #return
 
-    data = plot_pulses(image_stack)
+    #data = plot_pulses(image_stack)
+    data = plot_pulses_percent(image_stack)
     plt.title(file_name)
     plt.plot(range(image_stack.shape[0]), data)
     plt.show()
