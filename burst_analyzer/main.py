@@ -76,12 +76,12 @@ def find_all_pulses(image_stack):
     return result_image, max_pulses
 
 
-def main(file_name: str):
-    image_stack = io.imread(file_name)
+def cli():
+    image_stack = io.imread(sys.argv[1])
     result_image, max_pulses = find_all_pulses(image_stack)
     plt.imshow(result_image, cmap='gray', vmin=0, vmax=10, interpolation=None)
     plt.show()
 
 
 if __name__ == "__main__":
-    main(sys.argv[1])
+    cli()
