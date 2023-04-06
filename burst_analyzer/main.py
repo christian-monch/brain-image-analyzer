@@ -2,6 +2,7 @@ import dataclasses
 import enum
 import sys
 from collections import defaultdict
+from pathlib import Path
 from typing import List
 
 import numpy as np
@@ -100,8 +101,8 @@ def plot_pulses(image_stack):
                 if index >= len(result):
                     index = len(result) - 1
                 result[index] += 1
-    max_value = max(result)
-    return [v * (100.0 / max_value) for v in result]
+    return result
+    #return [v * (100.0 / max_value) if max_value > 0 else 0 for v in result]
 
 
 def plot_pulses_percent(image_stack):
@@ -138,21 +139,30 @@ def plot_pulses_percent(image_stack):
 
 
 def cli():
-    file_name = sys.argv[1]
-    image_stack = io.imread(file_name)
+    input_path = Path(sys.argv[1])
+    output_path = Path(sys.argv[2])
 
-    #result_image, max_pulses = find_all_pulses_image(image_stack)
-    #plt.title(file_name)
-    #plt.imshow(result_image, vmin=0, vmax=255, cmap='plasma', interpolation=None)
-    #plt.show()
-    #return
+    image_paths = [
+        p.relative_to(input_path)
+        for p in input_path.rglob('*.tif')
+        if p.relative_to(input_path).parts[0] != '.git'
+    ]
 
-    #data = plot_pulses(image_stack)
-    data = plot_pulses_percent(image_stack)
-    plt.title(file_name)
-    plt.plot(range(image_stack.shape[0]), data)
-    plt.show()
+    for image_path in image_paths:
+
+        image_name = image_path.parts[-2] + "\n" + image_path.parts[-1]
+        result_path = output_path / image_path.with_suffix('.png')
+        result_path.parent.mkdir(parents=True, exist_ok=True)
+
+        image_stack = io.imread(input_path / image_path)
+        data = plot_pulses(image_stack)
+
+        plt.figure()
+        plt.title(image_name)
+        plt.plot(range(image_stack.shape[0]), data)
+        plt.savefig(result_path)
+        plt.close()
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     cli()
