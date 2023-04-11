@@ -1,6 +1,7 @@
 import dataclasses
 import enum
 import sys
+from argparse import ArgumentParser
 from collections import defaultdict
 from pathlib import Path
 from typing import List
@@ -8,13 +9,33 @@ from typing import List
 import numpy as np
 from matplotlib import pyplot as plt
 from skimage import io
-from skimage.restoration import denoise_tv_chambolle
+
+
+argument_parser = ArgumentParser(
+    prog='pulse_analyzer',
+    description='Analyzes pulse events in image stacks',
+    epilog='for more information see: https://github.com/christian-monch/brain-image-analyzer'
+)
+
+argument_parser.add_argument(
+    'image_path',
+    help='directory that contains image stacks as ".tif" or ".tiff" files'
+)
+
+argument_parser.add_argument(
+    'output_path',
+    help='directory that will contain outputs. existing files will be overriden'
+)
+
 
 
 min_difference = 50
 lower_factor = 1/3
 upper_factor = 1/3
 min_duration = 2
+
+
+
 
 
 class State(enum.Enum):
@@ -90,19 +111,31 @@ def find_all_pulses_image(image_stack):
     return result_image, max_pulses
 
 
-def plot_pulses(image_stack):
+def get_pulses(image_stack):
     rows, columns = image_stack[0].shape
     result = [0] * image_stack.shape[0]
+
+    # Collect all bursting pixels
+    pulsing_pixels = dict()
     for r in range(rows):
         for c in range(columns):
             pulse_infos = find_pulses(image_stack, r, c)
+            if pulse_infos:
+                pulsing_pixels[(r, c)] = pulse_infos
+    total_pixel_number = len(pulsing_pixels)
+
+    # Find pulses
+    burst_per_frame = defaultdict(list)
+    for r in range(rows):
+        for c in range(columns):
+            pulse_infos = pulsing_pixels.get((r, c), [])
             for pulse_info in pulse_infos:
                 index = pulse_info.start + int(pulse_info.duration / 2)
                 if index >= len(result):
                     index = len(result) - 1
                 result[index] += 1
-    return result
-    #return [v * (100.0 / max_value) if max_value > 0 else 0 for v in result]
+    return total_pixel_number, result
+    #return total_pixel_number, [v * (100.0 / max_value) if max_value > 0 else 0 for v in result]
 
 
 def plot_pulses_percent(image_stack):
@@ -150,18 +183,30 @@ def cli():
 
     for image_path in image_paths:
 
-        image_name = image_path.parts[-2] + "\n" + image_path.parts[-1]
+        file_name, image_name = image_path.parts[-2], image_path.parts[-1]
+
+        image_id = file_name + '\n' + image_name
+        csv_name = file_name + ' - ' + image_name
+
         result_path = output_path / image_path.with_suffix('.png')
         result_path.parent.mkdir(parents=True, exist_ok=True)
+        csv_path = result_path.with_suffix('.csv')
 
         image_stack = io.imread(input_path / image_path)
-        data = plot_pulses(image_stack)
+        total_pixel_number, data = get_pulses(image_stack)
 
         plt.figure()
-        plt.title(image_name)
+        plt.title(image_id)
         plt.plot(range(image_stack.shape[0]), data)
         plt.savefig(result_path)
         plt.close()
+
+        csv_header_lines = [
+            f'name,"{csv_name}"',
+            f'total active points, {total_pixel_number}',
+            'frame, active points']
+        csv_data_lines = [f'{frame + 1}, {data}' for frame, data in zip(range(image_stack.shape[0]), data)]
+        csv_path.write_text('\n'.join(csv_header_lines + csv_data_lines))
 
 
 if __name__ == '__main__':

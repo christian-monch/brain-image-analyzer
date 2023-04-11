@@ -1,4 +1,6 @@
 from __future__ import annotations
+
+from argparse import ArgumentParser
 from pathlib import Path
 
 from readlif.reader import LifFile
