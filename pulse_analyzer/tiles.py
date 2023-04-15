@@ -53,33 +53,28 @@ def tiles_analysis(image_stack: np.ndarray,
     x_per_tile = int(columns / tiles)
     y_per_tile = int(rows / tiles)
     for frame in range(frames):
-        tile_pulses = [
+        all_tile_pulses = [
             (tiles * int(r / y_per_tile) + int(c / x_per_tile), pulse_info)
             for (f, r, c), pulse_info in all_pulses.items()
             if f == frame]
 
-        if not tile_pulses:
+        if not all_tile_pulses:
             continue
 
-        max_value = max([
-            pulse_info.value
-            for (_, pulse_info) in tile_pulses])
-
-        for (pulse_info, tile_number) in tile_pulses:
-            tile_values = [
-                pulse_info.value
-                for (tile, pulse_info) in tile_pulses
-                if tile == tile_number]
-            if not tile_values:
+        for tile in range(tiles * tiles):
+            tile_pulses = [
+                pulse_info
+                for t, pulse_info in all_tile_pulses
+                if t == tile]
+            if not tile_pulses:
                 continue
-            average_value = int(sum(tile_values) / len(tile_values))
-            tile_map[tile_number][frame] = int(average_value * 255 / max_value)
+            tile_map[tile][frame] = len(tile_pulses)
 
     plt.clf()
     plt.title(file_name)
     plt.xlim(0, 60)
     plt.ylim(0, tiles * tiles)
-    plt.imshow(tile_map, vmin=0, vmax=255, cmap='hot', interpolation='bilinear')
+    plt.imshow(tile_map, cmap='hot', interpolation='bilinear')
     plt.show()
 
 
