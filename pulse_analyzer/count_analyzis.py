@@ -152,10 +152,15 @@ def test_clustering(image_stack, file_name):
 
     all_pulses_array = np.zeros([len(all_pulses), 2], dtype=np.int32)
     for index, (row, column) in enumerate(all_pulses):
-        all_pulses_array[index][0] = column
-        all_pulses_array[index][1] = row
+        all_pulses_array[index] = [column, row]
 
     X = all_pulses_array
+    plt.xlim(0, 512)
+    plt.ylim(0, 512)
+    for (x, y) in X:
+        plt.plot(x, y, 'r.')
+    plt.show()
+
     #from sklearn.datasets import make_blobs
     #X = make_blobs()[0]
     clustering = AffinityPropagation(max_iter=255).fit(X)
