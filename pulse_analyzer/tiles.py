@@ -122,8 +122,8 @@ def tiles_analysis(image_stack: np.ndarray,
             tile_map[tile][frame] = len(tile_pulses)
 
     tiles_max_pulses = np.max(tile_map)
-    if tiles_max_pulses != 0:
-        tile_map = 100 / tiles_max_pulses * tile_map
+    if tiles_max_pulses != 0 and normalize:
+        tile_map = normalize / tiles_max_pulses * tile_map
         different_sets = get_diff_sets(pulse_sets)
     else:
         tile_map = np.zeros([tiles * tiles, frames])
