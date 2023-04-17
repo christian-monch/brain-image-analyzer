@@ -7,6 +7,7 @@ from pathlib import Path
 import numpy as np
 from matplotlib import pyplot as plt
 from matplotlib.colors import ListedColormap
+from seaborn import heatmap
 
 from pulse_analyzer.driver import run_processing
 from pulse_analyzer.tools import TileParameter, PulseParameter
@@ -28,6 +29,14 @@ argument_parser.add_argument(
     help='directory that will contain outputs, existing files will be overriden, if the directory does not exists, it '
          'will be created')
 
+argument_parser.add_argument(
+    '-t',
+    '--tiles',
+    type=int,
+    default=8,
+    dest='tiles',
+    help='how rows and columns of tiles (default: 8)')
+
 
 cmap = plt.cm.inferno
 alpha_cmap = cmap(np.arange(cmap.N))
@@ -36,7 +45,44 @@ alpha_cmap = ListedColormap(alpha_cmap)
 
 
 pulse_parameter = PulseParameter()
-tile_parameter = TileParameter()
+tile_parameter = TileParameter(number_of_tiles=8)
+
+
+def get_diff_sets(set_list: list[set]) -> set[frozenset]:
+    """ determine how many different there are """
+
+    if len(set_list) == 0:
+        return set()
+
+    if len(set_list) == 1:
+        return {frozenset(set_list[0])}
+
+    differing_sets = set_list[:]
+    restart = True
+    while restart is True:
+        restart = False
+        for index_a in range(len(differing_sets) - 1):
+            pulse_set_a = differing_sets[index_a]
+            for index_b in range(index_a + 1, len(differing_sets)):
+                pulse_set_b = differing_sets[index_b]
+
+                if pulse_set_a == pulse_set_b:
+                    continue
+
+                # We consider contained sets to be equivalent to the containing set
+                x = pulse_set_a.union(pulse_set_b)
+                if x == pulse_set_a or x == pulse_set_b:
+                    differing_sets[index_a] = x
+                    differing_sets[index_b] = x
+                    restart = True
+
+                # Everything else is considered to be different
+
+            if restart is True:
+                break
+
+    result = set([frozenset(s) for s in differing_sets])
+    return result
 
 
 def tiles_analysis(image_stack: np.ndarray,
@@ -52,6 +98,8 @@ def tiles_analysis(image_stack: np.ndarray,
     tile_map = np.zeros([tiles * tiles, frames])
     x_per_tile = int(columns / tiles)
     y_per_tile = int(rows / tiles)
+    pulse_sets = list()
+
     for frame in range(frames):
         all_tile_pulses = [
             (tiles * int(r / y_per_tile) + int(c / x_per_tile), pulse_info)
@@ -60,6 +108,9 @@ def tiles_analysis(image_stack: np.ndarray,
 
         if not all_tile_pulses:
             continue
+
+        # Add the pulse set (should be something like set(select(0, ...))
+        pulse_sets.append({pulse[0] for pulse in all_tile_pulses})
 
         for tile in range(tiles * tiles):
             tile_pulses = [
@@ -70,12 +121,21 @@ def tiles_analysis(image_stack: np.ndarray,
                 continue
             tile_map[tile][frame] = len(tile_pulses)
 
+    tiles_max_pulses = np.max(tile_map)
+    if tiles_max_pulses != 0:
+        tile_map = 100 / tiles_max_pulses * tile_map
+        different_sets = get_diff_sets(pulse_sets)
+    else:
+        tile_map = np.zeros([tiles * tiles, frames])
+        different_sets = []
+
+    # Write an image ot file
     plt.clf()
-    plt.title(file_name)
-    plt.xlim(0, 60)
-    plt.ylim(0, tiles * tiles)
-    plt.imshow(tile_map, cmap='hot', interpolation='bilinear')
-    plt.show()
+    plt.title(file_name + f" ({len(different_sets)} shapes)")
+    heatmap(tile_map, cmap='hot', annot=False)
+    plt.savefig(result_path_stem.with_suffix('.png'))
+
+    # Write csv to file
 
 
 def cli():
@@ -83,6 +143,8 @@ def cli():
     arguments = argument_parser.parse_args()
     input_path = Path(arguments.image_path)
     output_path = Path(arguments.output_path)
+
+    tile_parameter.number_of_tiles = arguments.tiles
 
     run_processing(
         input_path,
